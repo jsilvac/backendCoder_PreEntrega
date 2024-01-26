@@ -15,7 +15,7 @@ class ProductManager {
 
     async checkFileExist() {
         try {
-            console.log("Esta es la ruta: ", this.filePath);
+
             await fs.promises.stat(this.filePath);
             return true;
         } catch (error) {
@@ -36,13 +36,12 @@ class ProductManager {
     async getProducts() {
         try {
             const fileExists = await this.checkFileExist();
-            console.log("fileexist", fileExists)
+            
             if (!fileExists) {
                 await this.createFile();
             }
     
             const data = await fs.promises.readFile(this.filePath, "utf8");
-            console.log("esto trae el data del readfile", data)
             
             return data ? JSON.parse(data) : [];
     
@@ -54,6 +53,7 @@ class ProductManager {
     
 
     async addProduct(product) {
+
         try {
             
             const existingProducts = await this.getProducts();
@@ -84,16 +84,45 @@ class ProductManager {
         }
     }
     
-    
+    async updateProduct(productID, updateData) {
+        try {
+            const existingProducts = await this.getProducts();
+            console.log("Antes de la actualización:", JSON.stringify(existingProducts, null, 2));
+
+            const existingProductIndex = existingProducts.findIndex(p => p.id === productID);
+
+            if (existingProductIndex >= 0) {
+                console.log("entro al update", updateData)
+
+                const PordExist = existingProducts[existingProductIndex];
+
+                for (const key in updateData) {
+                    if (updateData.hasOwnProperty(key)) {
+                        PordExist[key] = updateData[key];
+                    }
+                }
+                existingProducts[existingProductIndex] = PordExist;
+
+                await fs.promises.writeFile(this.filePath, JSON.stringify(existingProducts), 'utf8');
+                
+                return existingProducts[existingProductIndex];
+            } else {
+                throw new Error('Producto no encontrado');
+            }
+            console.log("no entro")
+        } catch (error) {
+            console.error('Error:', error);
+            throw new Error('Error del servidor');
+        }
+    }
     
     async getProductById(idProduct) {
 
         try{
             
-            const products = await this.getProducts();
-    
+            const products = await this.getProducts();   
             const product = products.find(item => item.id === idProduct);
-    
+
             return product ? product : null;
 
         }catch(error){
@@ -101,6 +130,31 @@ class ProductManager {
             return [];
         }
     }
+
+    async deleteProduct(productID) {
+
+        try {
+            const existingProducts = await this.getProducts();
+            
+            console.log("produc id: ", productID)
+            const existingProductIndex = existingProducts.findIndex(p => p.id === productID);
+            console.log("exist id", existingProductIndex)
+            if (existingProductIndex >= 0) {
+
+                existingProducts.splice(existingProductIndex, 1);
+    
+                await fs.promises.writeFile(this.filePath, JSON.stringify(existingProducts), 'utf8');
+    
+                return { message: 'Producto eliminado correctamente' };
+            } else {
+                throw new Error('Producto no encontrado!');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            throw new Error('Error del servidor');
+        }
+    }
+    
 }
 
 // Enpoint 
@@ -126,8 +180,7 @@ router.get("/api/products", async (req, res) => {
         }
        
         res.status(200).json(allProducts);
-        
-
+    
     }catch(error){
         console.error('Error:', error);
         res.status(500).send('Error del servidor');
@@ -141,8 +194,8 @@ router.get("/api/products/:pid", async (req, res)=>{
     
     try{
 
-        const product = await prodMan.getProductById(parseInt(xId));
-        
+        const product = await prodMan.getProductById(xId);
+ 
         if(!product){
             res.status(404).send("Producto no encontrado");
             return
@@ -150,7 +203,6 @@ router.get("/api/products/:pid", async (req, res)=>{
         
         res.status(200).json(product);
         
-
     }catch(error){
         console.error('Error:', error);
         res.status(500).send('Error del servidor');
@@ -170,9 +222,7 @@ router.post("/api/products", async (req,res) => {
             return
         }
 
-        console.log(newProduct)
-
-        const addNewProd = await prodMan.addProduct(newProduct);
+       const addNewProd = await prodMan.addProduct(newProduct);
 
         res.status(201).json({
             message:"pruducto creado correctamente",
@@ -185,14 +235,51 @@ router.post("/api/products", async (req,res) => {
     }
 })
 
-// router.put("api/products/:pid", (req,res) => {
-//     res.send('prod put')
-// })
+router.put("/api/products/:pid", async (req,res) => {
+   
+    try{
 
-// router.delete("api/products/:pid", (req,res) => {
-//     res.send('prod delete')
-// })
+        const prodId = req.params.pid;
+        const updateData = req.body;
+        const prodMan = new ProductManager();
 
+
+        await prodMan.updateProduct(prodId, updateData)
+        .then(()=>{
+            res.status(200).json({message:'producto actualizado'});
+            })
+        .catch((err)=>{
+            console.log(err);
+            res.status(500).json({message:'error al actualizar el producto'+ err});
+            });
+
+    }catch(error){
+        console.error('Error:', error);
+        res.status(500).send('Error del servidor');
+    }  
+})
+
+router.delete("/api/products/:pid", async (req,res) => {
+    
+    try{
+
+        const producId = req.params.pid
+        console.log("id :",producId)
+        const prodMan = new ProductManager()
+    
+        await prodMan.deleteProduct(producId)
+    
+        res.status(201).json({
+            message:"Producto eliminado correctamente",
+            
+        }) 
+
+    }catch(error){
+        console.error('Error:', error);
+        res.status(500).send('Error del servidor');
+    }
+
+})
 
 
 export default router
